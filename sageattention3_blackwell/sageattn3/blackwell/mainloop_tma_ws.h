@@ -30,6 +30,13 @@
 #include "named_barrier.h"
 namespace flash {
 
+// scaled_fp4_quant_permute stores the tokens of every group of 32 keys in a permuted order (load_token_id in
+// fp4_quantization_4d.cu, which is its own inverse), so column col of an S tile holds the key of this token.
+CUTLASS_DEVICE int key_token_of_column(int col) {
+    int const residue = col % 32;
+    return (col / 32) * 32 + (residue / 8) * 2 + ((residue % 8) / 2) * 8 + (residue % 8) % 2;
+}
+
 using namespace cute;
 
 template <typename Ktraits, bool Is_causal>
@@ -737,10 +744,11 @@ struct CollectiveMainloopFwd {
             Tensor tScS = thread_mma_qk.partition_C(cS);
             CUTLASS_PRAGMA_UNROLL
             for (int i = 0; i < size(tSrS); ++i) {
-                if constexpr (!Is_causal) {  // Just masking based on col
-                    if (int(get<1>(tScS(i))) >= int(unpadded_seqlen_k - n_block * kBlockN)) { tSrS(i) = -INFINITY; }
+                int const key = key_token_of_column(int(get<1>(tScS(i))));
+                if constexpr (!Is_causal) {  // Just masking based on the key length
+                    if (key >= int(unpadded_seqlen_k - n_block * kBlockN)) { tSrS(i) = -INFINITY; }
                 } else { 
-                    if (int(get<1>(tScS(i))) >= std::min(seqlen_k - n_block * kBlockN,
+                    if (key >= std::min(seqlen_k - n_block * kBlockN,
                                                         col_limit_causal(int(get<0>(tScS(i))), n_block))) {
                         tSrS(i) = -INFINITY;
                     }
@@ -838,7 +846,7 @@ struct CollectiveMainloopFwd {
             Tensor tScS = thread_mma_qk.partition_C(cS);
             #pragma unroll
             for (int i = 0; i < size(tSrS); ++i) {
-                if (int(get<1>(tScS(i))) >= col_limit_causal(int(get<0>(tScS(i))), n_block - 1)) {
+                if (key_token_of_column(int(get<1>(tScS(i)))) >= col_limit_causal(int(get<0>(tScS(i))), n_block)) {
                     tSrS(i) = -INFINITY;
                 }
             }
