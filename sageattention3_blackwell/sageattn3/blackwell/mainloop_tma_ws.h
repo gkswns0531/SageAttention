@@ -852,6 +852,7 @@ struct CollectiveMainloopFwd {
             }
             softmax_fused.template online_softmax_with_quant</*Is_first=*/false>(tSrS, AbsMaxP, mainloop_params.softmax_scale_log2);
             Tensor tOrO = make_fragment_like(tOrO_store);
+            clear(tOrO);
             consumer_wait(pipeline_v, smem_pipe_read_v);
             copy_v_block(_0{});
             quantize(_0{}, tSrS_converion_view);
@@ -889,6 +890,7 @@ struct CollectiveMainloopFwd {
             }
             softmax_fused.template online_softmax_with_quant</*Is_first=*/false>(tSrS, AbsMaxP, mainloop_params.softmax_scale_log2);
             Tensor tOrO = make_fragment_like(tOrO_store);
+            clear(tOrO);
             consumer_wait(pipeline_v, smem_pipe_read_v);
             copy_v_block(_0{});
             quantize(_0{}, tSrS_converion_view);
